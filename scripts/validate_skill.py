@@ -14,6 +14,7 @@ Exit code 0 on success, 1 on any failure.
 
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
@@ -33,13 +34,21 @@ def _parse_frontmatter(text: str) -> dict[str, str]:
 
     fields: dict[str, str] = {}
     closed = False
+    block_key = None  # key whose value is a `>` / `|` block scalar being read
     for line in lines[1:]:
         if line.strip() == "---":
             closed = True
             break
+        if block_key and (line[:1] in (" ", "	") or not line.strip()):
+            fields[block_key] = f"{fields[block_key]} {line.strip()}".strip()
+            continue
+        block_key = None
         if ":" in line:
             key, _, value = line.partition(":")
-            fields[key.strip()] = value.strip()
+            key, value = key.strip(), value.strip()
+            if re.fullmatch(r"[>|][-+0-9]*", value):
+                block_key, value = key, ""
+            fields[key] = value
 
     if not closed:
         raise ValueError("frontmatter block is not closed with a second '---'")
